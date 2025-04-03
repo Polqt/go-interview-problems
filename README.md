@@ -7,6 +7,11 @@ for technical interviews. These problems focus on real-world scenarios, includin
 
 Here is a list of the problems available in the repository. Problems are organized by their respective tags:
 
+### Concurrency
+
+* [First Successful Key Lookup](01-first-successful-key-lookup/) 
+
+
 ## Contributing
 
 We welcome contributions from anyone looking to add more problems, improve solutions, or provide better documentation. Please refer to 
