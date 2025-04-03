@@ -10,6 +10,7 @@ Here is a list of the problems available in the repository. Problems are organiz
 ### Concurrency
 
 * [First Successful Key Lookup](01-first-successful-key-lookup/) 
+* [Equivalent Binary Trees](02-equivalent-binary-trees/)
 
 
 ## Contributing
