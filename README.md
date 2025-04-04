@@ -13,6 +13,7 @@ Here is a list of the problems available in the repository. Problems are organiz
 * [Equivalent Binary Trees](02-equivalent-binary-trees/)
 * [Web Crawler](03-web-crawler/)
 * [Non-Blocking Cache](04-non-blocking-cache/)
+* [Costly Connection With Unsafe Storage](05-costly-connections-with-unsafe-storage/)
 
 
 ## Contributing
