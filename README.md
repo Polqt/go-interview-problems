@@ -16,6 +16,7 @@ Here is a list of the problems available in the repository. Problems are organiz
 * [Costly Connection With Unsafe Storage](05-costly-connections-with-unsafe-storage/)
 * [Rate Limiter](06-rate-limiter/)
 * [TTL Cache](07-ttl-cache/)
+* [Distributed Task Executor](08-distributed-task-executor/)
 
 ## Contributing
 
