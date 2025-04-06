@@ -1,30 +1,168 @@
 package main
 
 import (
+	"context"
+	"errors"
+	"sync"
 	"testing"
 	"time"
 )
 
-func TestSendAndSave(t *testing.T) {
-	requests := []string{"req1", "req2", "req3", "req4", "req5"}
-	maxConn := 2
-	expecTime := 8 * time.Second
+type MockConnection struct {
+	delay time.Duration
+	ready bool
+	sync.Mutex
+}
 
-	start := time.Now()
-	sendAndSave(requests, maxConn)
-	execTime := time.Since(start).Round(time.Second)
+func (c *MockConnection) Connect() {
+	c.Lock()
+	defer c.Unlock()
 
-	if len(storage.data) != len(requests) {
-		t.Errorf("Expected %d saved items, got %d", len(requests), len(storage.data))
+	<-time.After(c.delay)
+	c.ready = true
+}
+
+func (c *MockConnection) Disconnect() {
+	c.Lock()
+	defer c.Unlock()
+
+	<-time.After(c.delay)
+	c.ready = false
+}
+
+func (c *MockConnection) Send(req string) (string, error) {
+	c.Lock()
+	defer c.Unlock()
+
+	if !c.ready {
+		return "", errors.New("connection is not ready")
 	}
 
-	for i, data := range storage.data {
-		if data == "" {
-			t.Errorf("data at index %d is corrupted (empty string)", i)
+	// Sending request
+	<-time.After(c.delay)
+	return "resp:" + req, nil
+}
+
+type MockCreator struct {
+	delay       time.Duration
+	connections []Connection
+	sync.Mutex
+}
+
+func NewMockCreator(max int, delay time.Duration) *MockCreator {
+	return &MockCreator{connections: make([]Connection, 0, max), delay: delay}
+}
+
+func (c *MockCreator) NewConnection() (Connection, error) {
+	c.Lock()
+	defer c.Unlock()
+
+	for i, conn := range c.connections {
+		if conn.(*MockConnection).ready {
+			c.connections = append(c.connections[:i], c.connections[i+1:]...)
 		}
 	}
 
-	if execTime > expecTime {
-		t.Errorf("func takes too long expected: %d seconds, got %d seconds", expecTime, execTime)
+	if len(c.connections) == cap(c.connections) {
+		return nil, errors.New("too many connections")
+	}
+
+	conn := &MockConnection{
+		ready: false,
+		delay: c.delay,
+	}
+	c.connections = append(c.connections, conn)
+	return conn, nil
+}
+
+type UnsafeStorage struct {
+	delay time.Duration
+	sem   chan struct{}
+	data  []string
+	sync.Mutex
+}
+
+func NewUnsafeStorage(delay time.Duration) *UnsafeStorage {
+	return &UnsafeStorage{sem: make(chan struct{}, 1), delay: delay}
+}
+
+func (s *UnsafeStorage) Save(data string) {
+	select {
+	case s.sem <- struct{}{}:
+		<-s.sem
+	default:
+		data = "" // corrupt string
+	}
+	<-time.After(s.delay)
+
+	s.Lock()
+	defer s.Unlock()
+	s.data = append(s.data, data)
+}
+
+func TestSendAndSave(t *testing.T) {
+	tests := []struct {
+		name     string
+		requests []string
+		maxConn  int
+		delay    time.Duration
+		ttl      time.Duration
+		err      error
+	}{
+		{
+			name:     "multiple requests",
+			requests: []string{"req1", "req2", "req3", "req4", "req5"},
+			maxConn:  2,
+			delay:    50 * time.Millisecond,
+			ttl:      425 * time.Millisecond,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			saver := NewUnsafeStorage(tt.delay)
+			creator := NewMockCreator(tt.maxConn, tt.delay)
+
+			ctx, cancel := context.WithTimeout(context.Background(), tt.ttl)
+			done := make(chan struct{})
+			go func() {
+				requests := make([]string, len(tt.requests))
+				copy(requests, tt.requests)
+				SendAndSave(creator, saver, requests, tt.maxConn)
+				close(done)
+			}()
+
+			select {
+			case <-done:
+			case <-ctx.Done():
+				cancel()
+				t.Errorf("func takes too long")
+			}
+			cancel()
+
+			for _, conn := range creator.connections {
+				if conn.(*MockConnection).ready {
+					t.Errorf("Connection is not closed")
+				}
+			}
+
+			if len(saver.data) != len(tt.requests) {
+				t.Errorf("Expected %d saved items, got %d", len(saver.data), len(tt.requests))
+			}
+
+			m := map[string]bool{}
+			for _, req := range tt.requests {
+				m[req] = true
+			}
+
+			for _, data := range saver.data {
+				if data == "" {
+					t.Errorf("data is corrupted (empty string)")
+				}
+				if m[data] {
+					m[data] = false
+				}
+			}
+		})
 	}
 }
