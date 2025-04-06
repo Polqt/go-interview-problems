@@ -1,10 +1,6 @@
-package solution
+package main
 
-import "time"
-
-type RateLimiter struct {
-	ticker *time.Ticker
-}
+type RateLimiter struct{}
 
 func NewRateLimiter(n int) *RateLimiter {
 	return &RateLimiter{}
