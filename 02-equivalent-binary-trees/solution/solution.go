@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-
 	"golang.org/x/tour/tree"
 )
 
@@ -38,8 +36,4 @@ func Same(t1, t2 *tree.Tree) bool {
 			return true
 		}
 	}
-}
-
-func main() {
-	fmt.Println(Same(tree.New(1), tree.New(2)))
 }
