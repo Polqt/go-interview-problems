@@ -1,9 +1,9 @@
 # First Successful Key Lookup
 
-You are given a function `get(ctx, address, key)`, which retrieves a value for a given key from a remote address. However, you don't know which address has the value, and network calls can fail.
+You are given an interface `Getter`, which retrieves a value for a given key from a remote address. However, you don't know which address has the value, and network calls can fail.
 
 Your task is to implement the Get function that:
-* Calls get for each address in parallel.
+* Calls `Getter.Get()` for each address in parallel.
 * Returns the first successful response.
 * If all requests fail, returns an error.
 

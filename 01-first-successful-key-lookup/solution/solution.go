@@ -1,34 +1,39 @@
-package solution
+package main
 
 import (
 	"context"
-	"errors"
-	"time"
 )
 
-var ErrNotFound = errors.New("key not found")
-
-func get(ctx context.Context, address string, key string) (string, error) {
-	return "", nil
+type Getter interface {
+	Get(ctx context.Context, address, key string) (string, error)
 }
 
-func Get(ctx context.Context, addresses []string, key string) (string, error) {
-	// Creating context with timeout, so we can cancel it when receive first response (or timeout)
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+// Call `Getter.Get()` for each address in parallel.
+// Returns the first successful response.
+// If all requests fail, returns an error.
+func Get(ctx context.Context, getter Getter, addresses []string, key string) (string, error) {
+	if len(addresses) == 0 {
+		return "", nil
+	}
+
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	// Channels MUST be buffered, in other case there is a goroutine leakage
-	resCh, errCh := make(chan string, len(addresses)), make(chan error, len(addresses))
+	resCh, errCh := make(chan string, 1), make(chan error, len(addresses))
 
 	for _, address := range addresses {
 		go func() {
-			if val, err := get(ctx, address, key); err != nil {
+			if val, err := getter.Get(ctx, address, key); err != nil {
 				errCh <- err
 			} else {
 				// There is a potential goroutine leak, if channel was unbuffered.
 				// If the result is not first, we WILL NOT read this channel
 				// and this goroutine will stuck forever
-				resCh <- val
+				select {
+				case resCh <- val:
+				default:
+				}
 			}
 		}()
 	}
