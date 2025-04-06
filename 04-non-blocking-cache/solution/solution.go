@@ -1,43 +1,30 @@
 package main
 
 import (
-	"fmt"
-	"io"
-	"log"
-	"net/http"
 	"sync"
 )
 
-func getBody(address string) ([]byte, error) {
-	resp, err := http.Get(address)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	return body, nil
+type Client interface {
+	Get(address string) (string, error)
 }
 
 type task struct {
-	body  []byte
+	body  string
 	err   error
 	ready chan struct{}
 }
 
 type Cache struct {
-	m map[string]*task
+	client Client
+	m      map[string]*task
 	sync.Mutex
 }
 
-func NewCache() *Cache {
-	return &Cache{m: make(map[string]*task)}
+func NewCache(client Client) *Cache {
+	return &Cache{client: client, m: make(map[string]*task)}
 }
 
-func (c *Cache) Get(address string) ([]byte, error) {
+func (c *Cache) Get(address string) (string, error) {
 	c.Lock()
 	t := c.m[address]
 	if t == nil {
@@ -45,7 +32,7 @@ func (c *Cache) Get(address string) ([]byte, error) {
 		c.m[address] = t
 		c.Unlock()
 
-		t.body, t.err = getBody(address)
+		t.body, t.err = c.client.Get(address)
 		close(t.ready)
 		return t.body, t.err
 	} else {
@@ -54,14 +41,4 @@ func (c *Cache) Get(address string) ([]byte, error) {
 		<-t.ready
 		return t.body, t.err
 	}
-}
-
-func main() {
-	c := NewCache()
-	body, err := c.Get("https://www.google.com/")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Println(string(body))
 }

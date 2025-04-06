@@ -1,32 +1,22 @@
 package main
 
-import (
-	"context"
-	"io"
-	"net/http"
-)
-
-func getBody(address string) ([]byte, error) {
-	resp, err := http.Get(address)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	return body, nil
+type Client interface {
+	Get(address string) (string, error)
 }
 
-type Cache struct{}
-
-func NewCache() *Cache {
-	return &Cache{}
+type Cache struct {
+	client Client
+	// You can add new fields if needed
 }
 
-func (c *Cache) Get(ctx context.Context, address string) ([]byte, error) {
-	// Implement non-blocking cache HERE
-	return getBody(address)
+// Don't update signature of NewCache
+func NewCache(client Client) *Cache {
+	// TODO: Implement
+	return &Cache{client: client}
+}
+
+// Cache Client.Get result
+func (c *Cache) Get(address string) (string, error) {
+	// TODO: Implement. Right now it doesn't cache
+	return c.client.Get(address)
 }
