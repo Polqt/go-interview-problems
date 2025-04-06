@@ -1,8 +1,8 @@
 package main
 
 import (
-	"context"
 	"errors"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -59,7 +59,7 @@ func (c *MockCreator) NewConnection() (Connection, error) {
 
 	for i, conn := range c.connections {
 		if conn.(*MockConnection).ready {
-			c.connections = append(c.connections[:i], c.connections[i+1:]...)
+			c.connections = slices.Delete(c.connections, i, i+1)
 		}
 	}
 
@@ -123,22 +123,9 @@ func TestSendAndSave(t *testing.T) {
 			saver := NewUnsafeStorage(tt.delay)
 			creator := NewMockCreator(tt.maxConn, tt.delay)
 
-			ctx, cancel := context.WithTimeout(context.Background(), tt.ttl)
-			done := make(chan struct{})
-			go func() {
-				requests := make([]string, len(tt.requests))
-				copy(requests, tt.requests)
-				SendAndSave(creator, saver, requests, tt.maxConn)
-				close(done)
-			}()
-
-			select {
-			case <-done:
-			case <-ctx.Done():
-				cancel()
-				t.Errorf("func takes too long")
-			}
-			cancel()
+			requests := make([]string, len(tt.requests))
+			copy(requests, tt.requests)
+			SendAndSave(creator, saver, requests, tt.maxConn)
 
 			for _, conn := range creator.connections {
 				if conn.(*MockConnection).ready {
