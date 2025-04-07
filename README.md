@@ -28,6 +28,7 @@ Here is a list of the problems available in the repository. Problems are organiz
 * [Request With Failover](08-request-with-failover/)
 * [Merge Channels](09-merge-channels/)
 * [Concurrent Queue](10-concurrent-queue/)
+* [Concurrent Queue II](11-concurrent-queue-ii/)
 
 ## Contributing
 
