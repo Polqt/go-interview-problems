@@ -26,6 +26,7 @@ Here is a list of the problems available in the repository. Problems are organiz
 * [Rate Limiter](06-rate-limiter/)
 * [TTL Cache](07-ttl-cache/)
 * [Request With Failover](08-request-with-failover/)
+* [Merge Channels](09-merge-channels/)
 
 ## Contributing
 
