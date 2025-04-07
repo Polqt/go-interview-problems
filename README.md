@@ -3,6 +3,15 @@
 Welcome to the go-interview-problems repository! This repository is a collection of programming problems designed to help you practice 
 for technical interviews. These problems focus on real-world scenarios, including challenges that are commonly encountered in interviews at top tech companies.
 
+## How To Use
+Pick a problem. Solve it. And then run tests:
+```
+cd <problem>/
+go test
+```
+
+When problem is solved and tests passed. Or if you stuck - check the solution `<problem>/solution/`
+
 ## Problems
 
 Here is a list of the problems available in the repository. Problems are organized by their respective tags:
