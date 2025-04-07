@@ -12,22 +12,22 @@ type MockGetter struct {
 }
 
 type mockResponse struct {
-	data  []byte
+	data  string
 	err   error
 	delay time.Duration
 }
 
-func (m *MockGetter) Get(ctx context.Context, address string) ([]byte, error) {
+func (m *MockGetter) Get(ctx context.Context, address string) (string, error) {
 	resp, exists := m.responses[address]
 	if !exists {
-		return nil, errors.New("unknown address")
+		return "", errors.New("unknown address")
 	}
 
 	if resp.delay > 0 {
 		select {
 		case <-time.After(resp.delay):
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return "", ctx.Err()
 		}
 	}
 
@@ -35,81 +35,78 @@ func (m *MockGetter) Get(ctx context.Context, address string) ([]byte, error) {
 }
 
 func TestExecuteWithFailover(t *testing.T) {
-	originalGetter := getter
-	defer func() { getter = originalGetter }()
-
-	mockGetter := &MockGetter{
-		responses: map[string]mockResponse{
-			"success":      {[]byte("success"), nil, 0},
-			"error":        {nil, errors.New("failed"), 0},
-			"slow-success": {[]byte("slow success"), nil, 600 * time.Millisecond},
-			"timeout":      {[]byte("timeout"), nil, 2 * time.Second},
+	tests := []struct {
+		name     string
+		addresss []string
+		response string
+		err      error
+		ttl      time.Duration
+	}{
+		{
+			name:     "first node succeeds",
+			addresss: []string{"success", "error"},
+			response: "success",
+			err:      nil,
+			ttl:      time.Second,
+		},
+		{
+			name:     "failover to second node",
+			addresss: []string{"error", "success"},
+			response: "success",
+			err:      nil,
+			ttl:      time.Second,
+		},
+		{
+			name:     "timeout to second node",
+			addresss: []string{"timeout", "success"},
+			response: "success",
+			err:      nil,
+			ttl:      time.Second * 3,
+		},
+		{
+			name:     "all nodes fail",
+			addresss: []string{"error", "error"},
+			response: "",
+			err:      ErrRequestsFailed,
+			ttl:      time.Second,
+		},
+		{
+			name:     "context cancellation",
+			addresss: []string{"timeout", "timeout"},
+			response: "",
+			err:      context.DeadlineExceeded,
+			ttl:      time.Millisecond * 10, // Short timeout to trigger cancellation
+		},
+		{
+			name:     "slow node eventually succeeds",
+			addresss: []string{"slow-success"},
+			response: "slow success",
+			err:      nil,
+			ttl:      time.Second,
 		},
 	}
-	getter = mockGetter
 
-	t.Run("first node succeeds", func(t *testing.T) {
-		result, err := RequestWithFailover(context.Background(), []string{"success", "error"})
-		if err != nil {
-			t.Fatalf("Expected success, got error: %v", err)
-		}
-		if string(result) != "success" {
-			t.Errorf("Expected 'success', got: %s", string(result))
-		}
-	})
+	client := &MockGetter{
+		responses: map[string]mockResponse{
+			"success":      {"success", nil, 0},
+			"error":        {"", ErrRequestsFailed, 0},
+			"slow-success": {"slow success", nil, 600 * time.Millisecond},
+			"timeout":      {"timeout", nil, 2 * time.Second},
+		},
+	}
 
-	t.Run("failover to second node", func(t *testing.T) {
-		result, err := RequestWithFailover(context.Background(), []string{"error", "success"})
-		if err != nil {
-			t.Fatalf("Expected success, got error: %v", err)
-		}
-		if string(result) != "success" {
-			t.Errorf("Expected 'success', got: %s", string(result))
-		}
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), tt.ttl)
+			defer cancel()
 
-	t.Run("timeout to second node", func(t *testing.T) {
-		result, err := RequestWithFailover(context.Background(), []string{"timeout", "success"})
-		if err != nil {
-			t.Fatalf("Expected success, got error: %v", err)
-		}
-		if string(result) != "success" {
-			t.Errorf("Expected 'success', got: %s", string(result))
-		}
-	})
-
-	t.Run("all nodes fail", func(t *testing.T) {
-		_, err := RequestWithFailover(context.Background(), []string{"error", "error"})
-
-		if !errors.Is(err, ErrTaskFailed) {
-			t.Fatalf("Expected ErrTaskFailed, got: %v", err)
-		}
-	})
-
-	t.Run("context cancellation", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		go func() {
-			time.Sleep(10 * time.Millisecond)
-			cancel()
-		}()
-
-		_, err := RequestWithFailover(ctx, []string{"timeout", "timeout"})
-
-		if !errors.Is(err, context.Canceled) {
-			t.Fatalf("Expected context.Canceled, got: %v", err)
-		}
-	})
-
-	t.Run("slow node eventually succeeds", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-		defer cancel()
-
-		result, err := RequestWithFailover(ctx, []string{"slow-success"})
-		if err != nil {
-			t.Fatalf("Expected success, got error: %v", err)
-		}
-		if string(result) != "slow success" {
-			t.Errorf("Expected 'slow success', got: %s", string(result))
-		}
-	})
+			resp, err := RequestWithFailover(ctx, client, tt.addresss)
+			if err != tt.err {
+				t.Errorf("Unexpected error: %v", err)
+			}
+			if resp != tt.response {
+				t.Errorf("Expected: %s, got: %s", tt.response, resp)
+			}
+		})
+	}
 }

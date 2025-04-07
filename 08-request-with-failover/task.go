@@ -5,20 +5,17 @@ import (
 	"errors"
 )
 
-type Getter interface {
-	Get(ctx context.Context, address string) ([]byte, error)
+type Client interface {
+	Get(ctx context.Context, address string) (string, error)
 }
 
-var (
-	ErrTaskFailed = errors.New("task execution failed")
-	getter        Getter
-)
+var ErrRequestsFailed = errors.New("task execution failed")
 
 // RequestWithFailover attempts to request a data from available addresses:
 // 1. If error, immediately try the address without waiting
 // 2. If an address doesn't respond within 500ms, try the next but keep the original request running
-// 3. Return the first successful response, or all ErrTaskFailed if all nodes fail
+// 3. Return the first successful response, or all ErrRequestsFailed if all nodes fail
 // 4. Properly handle context cancellation throughout the process
-func RequestWithFailover(ctx context.Context, addresses []string) ([]byte, error) {
-	return nil, nil
+func RequestWithFailover(ctx context.Context, client Client, addresses []string) (string, error) {
+	return "", nil
 }

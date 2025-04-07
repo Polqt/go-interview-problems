@@ -6,22 +6,19 @@ import (
 	"time"
 )
 
-type Getter interface {
-	Get(ctx context.Context, address string) ([]byte, error)
+type Client interface {
+	Get(ctx context.Context, address string) (string, error)
 }
 
-var (
-	ErrRequestsFailed = errors.New("requests failed")
-	getter            Getter
-)
+var ErrRequestsFailed = errors.New("requests failed")
 
 // RequestWithFailover attempts to request a data from available addresses:
 // 1. If error, immediately try the address without waiting
 // 2. If an address doesn't respond within 500ms, try the next but keep the original request running
-// 3. Return the first successful response, or all ErrTaskFailed if all nodes fail
+// 3. Return the first successful response, or all ErrRequestsFailed if all nodes fail
 // 4. Properly handle context cancellation throughout the process
-func RequestWithFailover(ctx context.Context, addresses []string) ([]byte, error) {
-	ch := make(chan []byte, 1)
+func RequestWithFailover(ctx context.Context, client Client, addresses []string) (string, error) {
+	ch := make(chan string, 1)
 	errCh := make(chan error, len(addresses))
 
 	var errCnt int
@@ -30,7 +27,7 @@ func RequestWithFailover(ctx context.Context, addresses []string) ([]byte, error
 		defer cancel()
 
 		go func() {
-			resp, err := getter.Get(ctx, address)
+			resp, err := client.Get(ctx, address)
 			if err != nil {
 				errCh <- err
 				return
@@ -50,14 +47,14 @@ func RequestWithFailover(ctx context.Context, addresses []string) ([]byte, error
 		case <-nodeCtx.Done():
 			select {
 			case <-ctx.Done():
-				return nil, ctx.Err()
+				return "", ctx.Err()
 			default:
 			}
 		}
 	}
 
 	if errCnt == len(addresses) {
-		return nil, ErrRequestsFailed
+		return "", ErrRequestsFailed
 	}
 
 	for {
@@ -67,10 +64,10 @@ func RequestWithFailover(ctx context.Context, addresses []string) ([]byte, error
 		case <-errCh:
 			errCnt++
 			if errCnt == len(addresses) {
-				return nil, ErrRequestsFailed
+				return "", ErrRequestsFailed
 			}
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return "", ctx.Err()
 		}
 	}
 }
